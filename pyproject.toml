@@ -1,0 +1,6 @@
+[tool.pyrefly]
+search-paths = ["khalnayak"]
+
+[tool.pyright]
+extraPaths = ["khalnayak"]
+

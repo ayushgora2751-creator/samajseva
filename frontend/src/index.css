@@ -1,0 +1,111 @@
+@import "tailwindcss";
+
+:root {
+  --bg-dark: #100B24;
+  --bg-surface: #1B1238;
+  --bg-card: #23184a;
+  --primary-purple: #7048FF;
+  --electric-blue: #398BFF;
+  --accent-pink: #EC65CB;
+  --text-muted: #AAA3C7;
+  --success: #27D69B;
+  --warning: #FFB84D;
+}
+
+body {
+  background-color: #100B24;
+  color: #FFFFFF;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Glassmorphism utility */
+.glass-panel {
+  background: rgba(27, 18, 56, 0.75);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(112, 72, 255, 0.2);
+}
+
+.glass-card {
+  background: rgba(35, 24, 74, 0.65);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Neon Glows */
+.neon-glow-purple {
+  box-shadow: 0 0 25px rgba(112, 72, 255, 0.45), inset 0 0 15px rgba(112, 72, 255, 0.2);
+}
+
+.neon-glow-blue {
+  box-shadow: 0 0 25px rgba(57, 139, 255, 0.45);
+}
+
+.neon-glow-gold {
+  box-shadow: 0 0 25px rgba(255, 184, 77, 0.6), inset 0 0 10px rgba(255, 184, 77, 0.3);
+}
+
+.neon-glow-green {
+  box-shadow: 0 0 25px rgba(39, 214, 155, 0.5);
+}
+
+/* Neon text shadows */
+.text-glow-purple {
+  text-shadow: 0 0 12px rgba(112, 72, 255, 0.8);
+}
+
+.text-glow-blue {
+  text-shadow: 0 0 12px rgba(57, 139, 255, 0.8);
+}
+
+.text-glow-gold {
+  text-shadow: 0 0 15px rgba(255, 184, 77, 0.9);
+}
+
+/* Animated background gradient orbs */
+@keyframes pulse-slow {
+  0%, 100% {
+    transform: scale(1) translate(0, 0);
+    opacity: 0.25;
+  }
+  50% {
+    transform: scale(1.15) translate(20px, -20px);
+    opacity: 0.4;
+  }
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 8s infinite ease-in-out;
+}
+
+@keyframes float-tile {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(2deg);
+  }
+}
+
+.animate-float {
+  animation: float-tile 4s infinite ease-in-out;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #100B24;
+}
+::-webkit-scrollbar-thumb {
+  background: #23184a;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #7048FF;
+}

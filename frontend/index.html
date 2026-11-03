@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>BINGO ARENA – Online Multiplayer 1–25 Bingo</title>
+    <meta
+      name="description"
+      content="Pick Your Numbers. Challenge Your Friends. Make Your Move. The ultimate real-time 1–25 multiplayer Bingo experience."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800;900&family=JetBrains+Mono:wght@700;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+    <!-- Canvas Confetti CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+  </head>
+  <body>
+    <!-- Ambient Neon Background Orbs -->
+    <div class="glow-orb orb-purple"></div>
+    <div class="glow-orb orb-blue"></div>
+
+    <!-- Server Wakeup Banner (Render Free-Tier Cold Start) -->
+    <div id="server-status-banner" class="server-banner hidden">
+      <div class="spinner-small"></div>
+      <span
+        >Waking up free-tier server on Render (may take 20-30s on first
+        load)...</span
+      >
+    </div>
+
+    <!-- Top Navigation Bar -->
+    <header class="navbar">
+      <div class="nav-container">
+        <div class="brand-logo" onclick="app.showHome()">
+          <div class="logo-icon">🎯</div>
+          <div>
+            <span class="logo-title">BINGO ARENA</span>
+            <span class="logo-subtitle">MULTIPLAYER 1–25</span>
+          </div>
+        </div>
+        <div class="nav-actions">
+          <button
+            id="sound-toggle-btn"
+            class="icon-btn"
+            title="Toggle Sound"
+            onclick="app.toggleSound()"
+          >
+            <span id="sound-icon">🔊</span>
+          </button>
+          <button class="nav-link-btn" onclick="app.openRulesModal()">
+            How to Play
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Global Alert / Toast Notification -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- MAIN APP CONTAINER -->
+    <main class="app-main">
+      <!-- SCREEN 1: HOME PAGE -->
+      <section id="screen-home" class="screen-view active">
+        <div class="hero-content">
+          <div class="pill-badge">
+            <span>✨</span> Online 1v1 to 6-Player Arena
+          </div>
+          <h1 class="hero-title">
+            LET THE NUMBERS <br />
+            <span class="gradient-text">DECIDE YOUR DESTINY</span>
+          </h1>
+          <p class="hero-subtitle">
+            Challenge your friends in the ultimate 1–25 Bingo experience. Pick
+            your numbers, form 5 lines, and call BINGO!
+          </p>
+
+          <!-- Home Action Cards -->
+          <div class="action-cards-grid">
+            <!-- Create Room Card -->
+            <div class="action-card">
+              <div class="card-icon">🚀</div>
+              <h3>Create Private Room</h3>
+              <p>
+                Host a match, get a 6-letter room code, and invite your friends.
+              </p>
+              <div class="form-group">
+                <label>Your Nickname</label>
+                <input
+                  type="text"
+                  id="create-player-name"
+                  placeholder="e.g. ApexLegend"
+                  maxlength="20"
+                />
+              </div>
+              <div class="avatar-selection">
+                <label>Choose Avatar</label>
+                <div class="avatars-row" id="create-avatars-list"></div>
+              </div>
+              <button class="btn btn-primary" onclick="app.createRoom()">
+                <span>Create Arena</span> →
+              </button>
+            </div>
+
+            <!-- Join Room Card -->
+            <div class="action-card">
+              <div class="card-icon">⚔️</div>
+              <h3>Join Game</h3>
+              <p>Enter the 6-letter invitation code sent by your friend.</p>
+              <div class="form-group">
+                <label>Room Code</label>
+                <input
+                  type="text"
+                  id="join-room-code"
+                  placeholder="e.g. AB12CD"
+                  maxlength="8"
+                  class="code-input"
+                />
+              </div>
+              <div class="form-group">
+                <label>Your Nickname</label>
+                <input
+                  type="text"
+                  id="join-player-name"
+                  placeholder="e.g. ShadowViper"
+                  maxlength="20"
+                />
+              </div>
+              <div class="avatar-selection">
+                <label>Choose Avatar</label>
+                <div class="avatars-row" id="join-avatars-list"></div>
+              </div>
+              <button class="btn btn-secondary" onclick="app.joinRoom()">
+                <span>Join Arena</span> →
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCREEN 2: LOBBY PAGE -->
+      <section id="screen-lobby" class="screen-view">
+        <div class="lobby-card glass-panel">
+          <div class="pill-badge"><span>👥</span> ARENA LOBBY</div>
+          <h2>Waiting for Gladiators...</h2>
+          <p class="lobby-desc">
+            Share your room code with friends to join the match (2 to 6
+            players).
+          </p>
+
+          <!-- Room Code Display & Share Box -->
+          <div class="room-code-box">
+            <div class="code-details">
+              <span class="label">ROOM CODE</span>
+              <span class="code-text" id="lobby-room-code">------</span>
+            </div>
+            <div class="code-buttons">
+              <button
+                class="btn btn-sm btn-purple"
+                onclick="app.copyRoomCode()"
+              >
+                <span id="copy-btn-text">📋 Copy Code</span>
+              </button>
+              <button
+                class="btn btn-sm btn-green"
+                onclick="app.shareWhatsApp()"
+              >
+                💬 WhatsApp
+              </button>
+            </div>
+          </div>
+
+          <!-- Connected Players Roster -->
+          <div class="players-roster-header">
+            <h3>
+              Gladiators in Arena (<span id="lobby-player-count">1</span>/6)
+            </h3>
+          </div>
+          <div id="lobby-players-list" class="players-grid"></div>
+
+          <!-- Host Start Game Button -->
+          <div class="lobby-actions">
+            <button
+              id="start-game-btn"
+              class="btn btn-primary btn-lg"
+              onclick="app.startGame()"
+              disabled
+            >
+              Start Battle (Need 2+ Players)
+            </button>
+            <button class="btn btn-ghost" onclick="app.leaveRoom()">
+              Leave Lobby
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCREEN 3: GAME ARENA -->
+      <section id="screen-game" class="screen-view">
+        <div class="game-container">
+          <!-- Top Match Info Bar -->
+          <div class="match-bar glass-panel">
+            <div class="match-info-left">
+              <span class="code-tag"
+                >ROOM: <strong id="game-room-code">------</strong></span
+              >
+              <span id="turn-badge" class="turn-badge">YOUR TURN</span>
+            </div>
+            <div class="match-info-right">
+              <span id="active-turn-text" class="turn-desc">Waiting...</span>
+              <button
+                class="btn-exit"
+                onclick="app.leaveRoom()"
+                title="Leave Match"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+
+          <!-- B-I-N-G-O 5-Letter Milestone Tracker -->
+          <div class="bingo-tracker-wrap">
+            <div class="bingo-label">
+              B - I - N - G - O &nbsp; MILESTONES (<span
+                id="completed-lines-count"
+                >0</span
+              >/5 Lines)
+            </div>
+            <div class="bingo-letters-row">
+              <div class="bingo-letter" id="letter-B">B</div>
+              <div class="bingo-letter" id="letter-I">I</div>
+              <div class="bingo-letter" id="letter-N">N</div>
+              <div class="bingo-letter" id="letter-G">G</div>
+              <div class="bingo-letter" id="letter-O">O</div>
+            </div>
+          </div>
+
+          <!-- Layout Grid: Card + Called Numbers Sidebar -->
+          <div class="arena-grid">
+            <!-- Main 5x5 Interactive Board -->
+            <div class="board-column">
+              <div class="board-header">
+                <span>YOUR ARENA CARD (1–25)</span>
+                <span id="my-name-display" class="player-tag">You</span>
+              </div>
+              <div class="bingo-board" id="bingo-board-grid"></div>
+
+              <!-- Claim Bingo Button -->
+              <button
+                id="claim-bingo-btn"
+                class="btn btn-gold btn-block"
+                onclick="app.claimBingo()"
+              >
+                ⭐ CLAIM BINGO! (5 Lines)
+              </button>
+            </div>
+
+            <!-- Sidebar: Called Numbers & Gladiators -->
+            <div class="sidebar-column">
+              <!-- Called Numbers History -->
+              <div class="glass-panel sidebar-box">
+                <div class="box-header">
+                  <span
+                    >Called Numbers (<span id="called-count">0</span>/25)</span
+                  >
+                </div>
+                <div class="called-chips-container" id="called-chips-list">
+                  <span class="empty-hint">No numbers called yet.</span>
+                </div>
+              </div>
+
+              <!-- Players Mini Scoreboard -->
+              <div class="glass-panel sidebar-box">
+                <div class="box-header">
+                  <span>Arena Gladiators</span>
+                </div>
+                <div class="mini-players-list" id="mini-players-list"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCREEN 4: WINNER / CELEBRATION MODAL -->
+      <div id="modal-winner" class="modal-overlay hidden">
+        <div class="modal-card glass-panel text-center">
+          <div class="winner-trophy">👑</div>
+          <h2 id="winner-title" class="winner-heading">VICTORY ACHIEVED!</h2>
+          <p id="winner-subtitle" class="winner-sub">
+            BINGO conquered the arena!
+          </p>
+          <div class="modal-buttons">
+            <button class="btn btn-primary" onclick="app.restartGame()">
+              ⚔️ Rematch
+            </button>
+            <button class="btn btn-ghost" onclick="app.leaveRoom()">
+              Leave to Home
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- RULES MODAL -->
+      <div id="modal-rules" class="modal-overlay hidden">
+        <div class="modal-card glass-panel">
+          <div class="modal-header">
+            <h3>🎯 How to Play BINGO ARENA</h3>
+            <button class="close-btn" onclick="app.closeRulesModal()">✕</button>
+          </div>
+          <div class="rules-body">
+            <div class="rule-item">
+              <strong>1. Randomized 5×5 Board</strong>
+              <p>
+                Every player receives their own unique randomized grid
+                containing numbers 1 to 25.
+              </p>
+            </div>
+            <div class="rule-item">
+              <strong>2. Take Turns Calling Numbers</strong>
+              <p>
+                On your turn, click any uncalled number on your board. That
+                number is called and automatically stamped on all players'
+                boards!
+              </p>
+            </div>
+            <div class="rule-item">
+              <strong>3. B - I - N - G - O Lines</strong>
+              <p>
+                Every completed horizontal row, vertical column, or diagonal
+                line gives you 1 point. 1 line lights up 'B', 2 lines 'I', 3
+                lines 'N', 4 lines 'G', and 5 lines 'O'!
+              </p>
+            </div>
+            <div class="rule-item">
+              <strong>4. Winning the Match</strong>
+              <p>
+                The first player to reach 5 completed lines wins! The server
+                validates all claims authoritatively.
+              </p>
+            </div>
+          </div>
+          <button
+            class="btn btn-primary btn-block"
+            onclick="app.closeRulesModal()"
+          >
+            Got It!
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <!-- Load Config & Vanilla JS App -->
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
