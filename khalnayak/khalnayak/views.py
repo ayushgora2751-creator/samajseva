@@ -8,25 +8,37 @@ FRONTEND_DIR = settings.BASE_DIR.parent / 'frontend'
 
 def serve_frontend(request, path=''):
     """
-    Serves the static frontend (HTML, CSS, JS) directly from Django so
+    Serves the static frontend (HTML, CSS, JS, Favicon, Manifest) directly from Django so
     http://localhost:8080/ opens the game immediately.
     """
     clean_path = path.strip('/')
+
+    if clean_path in ('favicon.ico', 'favicon.svg'):
+        fav = FRONTEND_DIR / 'favicon.svg'
+        if fav.is_file():
+            resp = FileResponse(open(fav, 'rb'), content_type='image/svg+xml')
+            resp['Access-Control-Allow-Origin'] = '*'
+            return resp
+
     if not clean_path:
         target = FRONTEND_DIR / 'index.html'
     else:
         target = (FRONTEND_DIR / clean_path).resolve()
         # Security: prevent directory traversal
         if not str(target).startswith(str(FRONTEND_DIR.resolve())):
-            raise Http404("Not found")
+            target = FRONTEND_DIR / 'index.html'
 
     if target.is_file():
         content_type, _ = mimetypes.guess_type(str(target))
-        return FileResponse(open(target, 'rb'), content_type=content_type or 'text/plain')
+        resp = FileResponse(open(target, 'rb'), content_type=content_type or 'text/plain')
+        resp['Access-Control-Allow-Origin'] = '*'
+        return resp
 
     # Fallback to index.html for SPA routing
     index_file = FRONTEND_DIR / 'index.html'
     if index_file.is_file():
-        return FileResponse(open(index_file, 'rb'), content_type='text/html')
+        resp = FileResponse(open(index_file, 'rb'), content_type='text/html')
+        resp['Access-Control-Allow-Origin'] = '*'
+        return resp
 
     raise Http404("File not found")

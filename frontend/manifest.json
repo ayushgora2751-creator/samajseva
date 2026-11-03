@@ -1,0 +1,16 @@
+{
+  "name": "BINGO ARENA",
+  "short_name": "BingoArena",
+  "description": "Multiplayer 1-25 Online Real-Time Bingo Game",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#100B24",
+  "theme_color": "#7048FF",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}
