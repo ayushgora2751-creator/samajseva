@@ -184,16 +184,55 @@
           </div>
           <div id="lobby-players-list" class="players-grid"></div>
 
+          <!-- Interactive Custom Card Builder (1 to 25) -->
+          <div class="card-builder-section glass-panel">
+            <div class="builder-header">
+              <div>
+                <span class="pill-badge-small">✏️ CUSTOM BOARD BUILDER</span>
+                <h3>Arrange Numbers 1 to 25 By Choice</h3>
+                <p class="builder-desc">
+                  Click empty squares to place numbers in order <strong>1 to 25</strong>, or use Auto-Fill!
+                </p>
+              </div>
+              <div class="builder-status-badge" id="builder-status-badge">
+                Next Number: <span class="badge-num" id="builder-next-num">1</span>
+              </div>
+            </div>
+
+            <!-- Builder Grid -->
+            <div class="builder-grid-wrapper">
+              <div class="bingo-board builder-grid" id="builder-grid"></div>
+            </div>
+
+            <!-- Builder Toolbar -->
+            <div class="builder-toolbar">
+              <button type="button" class="btn btn-sm btn-secondary" onclick="app.randomizeBuilderCard()">
+                🎲 Auto-Fill Random
+              </button>
+              <button type="button" class="btn btn-sm btn-ghost" onclick="app.clearBuilderCard()">
+                🔄 Clear All
+              </button>
+              <button type="button" class="btn btn-sm btn-green" id="save-card-btn" onclick="app.saveBuilderCard()">
+                💾 Save Custom Board
+              </button>
+            </div>
+            <div id="builder-msg" class="builder-msg-tip">
+              💡 Click cells to place numbers 1 → 25, or click "Auto-Fill Random"!
+            </div>
+          </div>
+
           <!-- Host Start Game Button -->
           <div class="lobby-actions">
             <button
               id="start-game-btn"
               class="btn btn-primary btn-lg"
               onclick="app.startGame()"
-              disabled
             >
-              Start Battle (Need 2+ Players)
+              ▶ Start Battle (Solo Test)
             </button>
+            <p class="lobby-multiplayer-hint" style="color: #94a3b8; font-size: 0.85rem; margin-top: 8px;">
+              💡 <em>To play with a friend, open this site in an Incognito / Private window or another browser and enter the Room Code above!</em>
+            </p>
             <button class="btn btn-ghost" onclick="app.leaveRoom()">
               Leave Lobby
             </button>
@@ -282,10 +321,49 @@
                 </div>
                 <div class="mini-players-list" id="mini-players-list"></div>
               </div>
+
+              <!-- Arena Live Chat & Reactions -->
+              <div class="glass-panel sidebar-box chat-box">
+                <div class="box-header">
+                  <span>💬 Arena Chat & Reactions</span>
+                </div>
+
+                <!-- Emoji Reaction Bar -->
+                <div class="emoji-bar">
+                  <button type="button" class="emoji-btn" onclick="app.sendEmoji('🔥')">🔥</button>
+                  <button type="button" class="emoji-btn" onclick="app.sendEmoji('😂')">😂</button>
+                  <button type="button" class="emoji-btn" onclick="app.sendEmoji('🎯')">🎯</button>
+                  <button type="button" class="emoji-btn" onclick="app.sendEmoji('😱')">😱</button>
+                  <button type="button" class="emoji-btn" onclick="app.sendEmoji('👏')">👏</button>
+                  <button type="button" class="emoji-btn" onclick="app.sendEmoji('💀')">💀</button>
+                  <button type="button" class="emoji-btn" onclick="app.sendEmoji('👑')">👑</button>
+                  <button type="button" class="emoji-btn" onclick="app.sendEmoji('🚀')">🚀</button>
+                </div>
+
+                <!-- Chat Messages Stream -->
+                <div class="chat-messages-container" id="chat-messages-list">
+                  <span class="empty-hint">Say hi or tap an emoji above!</span>
+                </div>
+
+                <!-- Chat Input Form -->
+                <form class="chat-input-form" onsubmit="event.preventDefault(); app.sendTextMessage();">
+                  <input
+                    type="text"
+                    id="chat-input-field"
+                    placeholder="Type message..."
+                    maxlength="140"
+                    autocomplete="off"
+                  />
+                  <button type="submit" class="btn btn-sm btn-primary">Send</button>
+                </form>
+              </div>
             </div>
           </div>
         </div>
       </section>
+
+      <!-- Floating Emoji Reaction Container -->
+      <div id="floating-emoji-container" class="floating-emoji-container"></div>
 
       <!-- SCREEN 4: WINNER / CELEBRATION MODAL -->
       <div id="modal-winner" class="modal-overlay hidden">

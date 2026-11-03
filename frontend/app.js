@@ -72,6 +72,9 @@ class BingoArena {
     this.pollTimer = null;
     this.sound = new SoundEngine();
     this.lastState = null;
+    this.builderGrid = Array(5).fill(null).map(() => Array(5).fill(null));
+    this.builderNextNumber = 1;
+    this.seenMessageIds = new Set();
   }
 
   init() {
@@ -230,6 +233,7 @@ class BingoArena {
   openLobby() {
     document.getElementById('lobby-room-code').innerText = this.code;
     this.showScreen('screen-lobby');
+    this.initBuilderCard();
     this.startPolling();
   }
 
@@ -247,6 +251,135 @@ class BingoArena {
     const inviteUrl = `${window.location.origin}?room=${this.code}`;
     const text = `Join my Bingo Arena match! Room Code: ${this.code}\nLink: ${inviteUrl}`;
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+  }
+
+  // =========================================================================
+  // CARD BUILDER (Place numbers 1 to 25 by Choice)
+  // =========================================================================
+  initBuilderCard() {
+    if (this.card && this.card.length === 5 && this.card[0].length === 5) {
+      this.builderGrid = this.card.map((r) => [...r]);
+    } else {
+      this.builderGrid = Array(5).fill(null).map(() => Array(5).fill(null));
+    }
+    this.renderBuilderGrid();
+  }
+
+  renderBuilderGrid() {
+    const grid = document.getElementById('builder-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    const usedNumbers = new Set();
+    this.builderGrid.forEach((row) => {
+      row.forEach((n) => {
+        if (n !== null && n !== undefined) usedNumbers.add(n);
+      });
+    });
+
+    // Find smallest missing number in range 1..25
+    let nextNum = 26;
+    for (let i = 1; i <= 25; i++) {
+      if (!usedNumbers.has(i)) {
+        nextNum = i;
+        break;
+      }
+    }
+    this.builderNextNumber = nextNum;
+
+    const badgeEl = document.getElementById('builder-next-num');
+    const msgEl = document.getElementById('builder-msg');
+
+    if (badgeEl) {
+      badgeEl.innerText = nextNum <= 25 ? nextNum : '✅ 25/25';
+    }
+    if (msgEl) {
+      if (usedNumbers.size === 25) {
+        msgEl.innerHTML = '<span style="color: #4ade80; font-weight: 800;">✅ Board Ready! All 25 numbers arranged. Saved to arena!</span>';
+      } else {
+        msgEl.innerHTML = `Click any empty square to place number <strong>#${nextNum}</strong> (${usedNumbers.size}/25 placed)`;
+      }
+    }
+
+    this.builderGrid.forEach((row, rIdx) => {
+      row.forEach((num, cIdx) => {
+        const tile = document.createElement('div');
+        const isFilled = num !== null && num !== undefined;
+        tile.className = 'builder-tile' + (isFilled ? ' filled' : ' empty empty-hint-text');
+
+        if (isFilled) {
+          tile.innerText = num;
+          tile.title = `Click to remove #${num}`;
+          tile.onclick = () => {
+            this.sound.playClick();
+            this.builderGrid[rIdx][cIdx] = null;
+            this.renderBuilderGrid();
+          };
+        } else {
+          tile.innerText = '+';
+          tile.title = `Click to place #${nextNum}`;
+          tile.onclick = () => {
+            if (nextNum > 25) return;
+            this.sound.playTile();
+            this.builderGrid[rIdx][cIdx] = nextNum;
+            this.renderBuilderGrid();
+
+            // Auto-save if all 25 placed!
+            const newUsed = new Set();
+            this.builderGrid.forEach((r) => r.forEach((n) => { if (n) newUsed.add(n); }));
+            if (newUsed.size === 25) {
+              this.saveBuilderCard();
+            }
+          };
+        }
+        grid.appendChild(tile);
+      });
+    });
+  }
+
+  randomizeBuilderCard() {
+    this.sound.playClick();
+    const numbers = Array.from({ length: 25 }, (_, i) => i + 1);
+    for (let i = numbers.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [numbers[i], numbers[j]] = [numbers[j], numbers[i]];
+    }
+    this.builderGrid = [];
+    for (let r = 0; r < 5; r++) {
+      this.builderGrid.push(numbers.slice(r * 5, (r + 1) * 5));
+    }
+    this.renderBuilderGrid();
+    this.saveBuilderCard();
+  }
+
+  clearBuilderCard() {
+    this.sound.playClick();
+    this.builderGrid = Array(5).fill(null).map(() => Array(5).fill(null));
+    this.renderBuilderGrid();
+    this.toast('Card cleared. Click squares to place numbers 1 to 25!');
+  }
+
+  async saveBuilderCard() {
+    const used = new Set();
+    this.builderGrid.forEach((r) => r.forEach((n) => { if (n) used.add(n); }));
+    if (used.size !== 25) {
+      this.toast(`Please place all 25 numbers first (${used.size}/25 placed)`, true);
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/rooms/${this.code}/card/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player_id: this.playerId, card: this.builderGrid }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save card.');
+      this.card = this.builderGrid;
+      this.toast('✅ Custom 5×5 Card Saved & Ready!');
+    } catch (e) {
+      this.toast(e.message, true);
+    }
   }
 
   // API Call: Start Game (Host only)
@@ -325,8 +458,8 @@ class BingoArena {
       if (startBtn) {
         if (state.is_host) {
           startBtn.style.display = 'block';
-          startBtn.disabled = state.players.length < 2;
-          startBtn.innerText = state.players.length < 2 ? 'Need 2+ Players to Start' : 'Start Battle';
+          startBtn.disabled = false;
+          startBtn.innerText = state.players.length === 1 ? '▶ Start Battle (Solo Test)' : `⚔️ Start Battle (${state.players.length} Players)`;
         } else {
           startBtn.style.display = 'none';
         }
@@ -408,6 +541,10 @@ class BingoArena {
       if (state.status === 'finished' && state.winner_name) {
         this.showWinnerModal(state.winner_name);
       }
+    }
+
+    if (state.messages) {
+      this.renderChatMessages(state.messages);
     }
 
     this.lastState = state;
@@ -508,6 +645,97 @@ class BingoArena {
       this.pollState();
     } catch (err) {
       this.toast(err.message, true);
+    }
+  }
+
+  // =========================================================================
+  // LIVE CHAT & EMOJI REACTIONS
+  // =========================================================================
+  async sendEmoji(emoji) {
+    if (!this.code) return;
+    this.sound.playClick();
+    this.spawnFloatingEmoji(emoji);
+    try {
+      await fetch(`${API_BASE}/api/rooms/${this.code}/chat/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player_id: this.playerId, emoji }),
+      });
+      this.pollState();
+    } catch (e) {}
+  }
+
+  async sendTextMessage() {
+    if (!this.code) return;
+    const input = document.getElementById('chat-input-field');
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) return;
+    this.sound.playClick();
+    input.value = '';
+
+    try {
+      await fetch(`${API_BASE}/api/rooms/${this.code}/chat/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player_id: this.playerId, text }),
+      });
+      this.pollState();
+    } catch (e) {
+      this.toast('Failed to send message', true);
+    }
+  }
+
+  spawnFloatingEmoji(emoji) {
+    const container = document.getElementById('floating-emoji-container');
+    if (!container) return;
+    const el = document.createElement('div');
+    el.className = 'floating-emoji';
+    el.innerText = emoji;
+    el.style.right = `${15 + Math.random() * 110}px`;
+    container.appendChild(el);
+    setTimeout(() => el.remove(), 2800);
+  }
+
+  renderChatMessages(messages) {
+    const container = document.getElementById('chat-messages-list');
+    if (!container || !messages) return;
+
+    if (messages.length === 0) {
+      container.innerHTML = '<span class="empty-hint">Say hi or tap an emoji above!</span>';
+      return;
+    }
+
+    // Trigger floating emoji for new incoming emojis
+    messages.forEach((m) => {
+      if (!this.seenMessageIds.has(m.id)) {
+        this.seenMessageIds.add(m.id);
+        if (m.emoji && m.player_name !== this.playerName) {
+          this.spawnFloatingEmoji(m.emoji);
+        }
+      }
+    });
+
+    const isNearBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 40;
+
+    container.innerHTML = messages
+      .map((m) => {
+        const isEmojiOnly = m.emoji && !m.text;
+        const content = isEmojiOnly ? m.emoji : (m.text + (m.emoji ? ' ' + m.emoji : ''));
+        return `
+          <div class="chat-item">
+            <div class="chat-meta">
+              <span class="chat-author">${m.player_name}</span>
+              <span class="chat-time">${m.created_at_time || ''}</span>
+            </div>
+            <div class="chat-content ${isEmojiOnly ? 'emoji-only' : ''}">${content}</div>
+          </div>
+        `;
+      })
+      .join('');
+
+    if (isNearBottom) {
+      container.scrollTop = container.scrollHeight;
     }
   }
 

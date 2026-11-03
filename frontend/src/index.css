@@ -1,4 +1,5 @@
-@import "tailwindcss";
+/* Tailwind base styles */
+@layer base, components, utilities;
 
 :root {
   --bg-dark: #100B24;

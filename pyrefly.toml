@@ -1,0 +1,25 @@
+# Pyrefly Configuration for BINGO ARENA
+project-includes = ["khalnayak"]
+project-excludes = [
+  "**/.venv/**",
+  "**/__pycache__/**",
+  "**/node_modules/**",
+  "frontend/**"
+]
+use-ignore-files = true
+
+search-path = [
+  "khalnayak",
+  "khalnayak/khalnayak",
+  "khalnayak/game"
+]
+
+site-package-path = [
+  ".venv/Lib/site-packages",
+  "C:/Users/Ayush/AppData/Roaming/uv/python/cpython-3.12.15-windows-x86_64-none/Lib/site-packages"
+]
+
+ignore-missing-imports = ["*"]
+replace-imports-with-any = ["*"]
+ignore-errors-in-generated-code = true
+

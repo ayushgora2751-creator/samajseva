@@ -5,21 +5,23 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
 try:
-    from .models import Room, Player, CalledNumber
+    from .models import Room, Player, CalledNumber, ChatMessage
     from .serializers import (
         RoomSerializer,
         PlayerPrivateSerializer,
         PlayerPublicSerializer,
         CalledNumberSerializer,
+        ChatMessageSerializer,
     )
     from .game_logic import generate_card, calculate_lines
 except (ImportError, ValueError):
-    from game.models import Room, Player, CalledNumber
+    from game.models import Room, Player, CalledNumber, ChatMessage
     from game.serializers import (
         RoomSerializer,
         PlayerPrivateSerializer,
         PlayerPublicSerializer,
         CalledNumberSerializer,
+        ChatMessageSerializer,
     )
     from game.game_logic import generate_card, calculate_lines
 
@@ -140,9 +142,9 @@ def start_game(request, code):
     if room.host_player_id != player_id:
         return Response({'error': 'Only the room host can start the game.'}, status=status.HTTP_403_FORBIDDEN)
 
-    if room.player_count < 2:
+    if room.player_count < 1:
         return Response(
-            {'error': 'At least 2 players are required to start.'},
+            {'error': 'At least 1 player is required to start.'},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
@@ -256,7 +258,12 @@ def get_game_state(request, code):
             'lines_count': p_lines['total_lines'],
             'is_turn': p.turn_order == room.current_turn,
             'is_host': p.player_id == room.host_player_id,
+            'is_ready': p.is_ready,
         })
+
+    recent_messages = list(room.messages.order_by('-created_at')[:25])
+    recent_messages.reverse()
+    messages_data = ChatMessageSerializer(recent_messages, many=True).data
 
     return Response({
         'code': room.code,
@@ -273,6 +280,7 @@ def get_game_state(request, code):
         'my_card': player.card if player else [],
         'my_marked': player.marked if player else [],
         'my_lines': my_lines,
+        'messages': messages_data,
     })
 
 
@@ -329,3 +337,71 @@ def restart_game(request, code):
     room.save(update_fields=['status', 'current_turn', 'winner_name'])
 
     return Response({'message': 'Rematch started with fresh 5x5 boards!'})
+
+
+@api_view(['POST'])
+def update_card(request, code):
+    """
+    Allows a player to save their custom 5x5 card (filled by clicking order 1 to 25)
+    before the match starts.
+    """
+    room = get_object_or_404(Room, code=code.upper())
+    player_id = request.data.get('player_id')
+    card = request.data.get('card')
+
+    if room.status != Room.STATUS_WAITING:
+        return Response({'error': 'Cards can only be arranged before the match begins.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    player = room.players.filter(player_id=player_id).first()
+    if not player:
+        return Response({'error': 'Player not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    # Validate 5x5 card contains numbers 1..25 exactly once
+    if not isinstance(card, list) or len(card) != 5:
+        return Response({'error': 'Card must be a 5x5 matrix.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    flat = []
+    for row in card:
+        if not isinstance(row, list) or len(row) != 5:
+            return Response({'error': 'Each row must contain exactly 5 numbers.'}, status=status.HTTP_400_BAD_REQUEST)
+        flat.extend(row)
+
+    if sorted(flat) != list(range(1, 26)):
+        return Response({'error': 'Card must contain numbers 1 to 25 exactly once.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    player.card = card
+    player.is_ready = True
+    player.save(update_fields=['card', 'is_ready'])
+
+    return Response({'success': True, 'card': player.card, 'is_ready': player.is_ready})
+
+
+@api_view(['POST'])
+def send_chat(request, code):
+    """
+    Sends an emoji reaction or text chat message in the room.
+    """
+    room = get_object_or_404(Room, code=code.upper())
+    player_id = request.data.get('player_id')
+    text = (request.data.get('text') or '').strip()[:200]
+    emoji = (request.data.get('emoji') or '').strip()[:20]
+
+    if not text and not emoji:
+        return Response({'error': 'Message or emoji required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    player = room.players.filter(player_id=player_id).first()
+    player_name = player.name if player else 'Spectator'
+    avatar = player.avatar if player else 'cyber-fox'
+
+    msg = ChatMessage.objects.create(
+        room=room,
+        player_name=player_name,
+        avatar=avatar,
+        text=text,
+        emoji=emoji,
+    )
+
+    return Response({
+        'success': True,
+        'message': ChatMessageSerializer(msg).data,
+    }, status=status.HTTP_201_CREATED)

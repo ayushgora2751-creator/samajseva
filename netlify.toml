@@ -1,0 +1,17 @@
+# Netlify Configuration for BINGO ARENA
+# Root-level configuration for GitHub-connected deploys
+
+[build]
+  publish = "frontend"
+  command = "echo 'Static frontend ready - no build step needed'"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+

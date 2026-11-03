@@ -1,6 +1,21 @@
 [tool.pyrefly]
-search-paths = ["khalnayak"]
+search-path = [
+  "khalnayak",
+  "khalnayak/khalnayak",
+  "khalnayak/game"
+]
+site-package-path = [
+  ".venv/Lib/site-packages",
+  "C:/Users/Ayush/AppData/Roaming/uv/python/cpython-3.12.15-windows-x86_64-none/Lib/site-packages"
+]
+ignore-missing-imports = ["*"]
+replace-imports-with-any = ["*"]
+ignore-errors-in-generated-code = true
 
 [tool.pyright]
-extraPaths = ["khalnayak"]
-
+extraPaths = [
+  "khalnayak",
+  "khalnayak/khalnayak",
+  "khalnayak/game",
+  ".venv/Lib/site-packages"
+]

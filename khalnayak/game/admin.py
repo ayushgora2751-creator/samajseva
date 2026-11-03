@@ -1,8 +1,8 @@
 from django.contrib import admin
 try:
-    from .models import Room, Player, CalledNumber
+    from .models import Room, Player, CalledNumber, ChatMessage
 except (ImportError, ValueError):
-    from game.models import Room, Player, CalledNumber
+    from game.models import Room, Player, CalledNumber, ChatMessage
 
 
 @admin.register(Room)
@@ -21,4 +21,10 @@ class PlayerAdmin(admin.ModelAdmin):
 @admin.register(CalledNumber)
 class CalledNumberAdmin(admin.ModelAdmin):
     list_display = ('room', 'order', 'number', 'called_by', 'created_at')
+    list_filter = ('room',)
+
+
+@admin.register(ChatMessage)
+class ChatMessageAdmin(admin.ModelAdmin):
+    list_display = ('room', 'player_name', 'text', 'emoji', 'created_at')
     list_filter = ('room',)

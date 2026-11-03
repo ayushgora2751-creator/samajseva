@@ -1,8 +1,8 @@
 from rest_framework import serializers
 try:
-    from .models import Room, Player, CalledNumber
+    from .models import Room, Player, CalledNumber, ChatMessage
 except (ImportError, ValueError):
-    from game.models import Room, Player, CalledNumber
+    from game.models import Room, Player, CalledNumber, ChatMessage
 
 
 class PlayerPublicSerializer(serializers.ModelSerializer):
@@ -42,3 +42,14 @@ class RoomSerializer(serializers.ModelSerializer):
             'players',
             'created_at',
         ]
+
+
+class ChatMessageSerializer(serializers.ModelSerializer):
+    created_at_time = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ChatMessage
+        fields = ['id', 'player_name', 'avatar', 'text', 'emoji', 'created_at', 'created_at_time']
+
+    def get_created_at_time(self, obj):
+        return obj.created_at.strftime('%H:%M')

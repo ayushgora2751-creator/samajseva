@@ -1,20 +1,32 @@
-# pyrefly: ignore[untyped-import]
-from django.shortcuts import redirect
-# pyrefly: ignore[untyped-import]
-from django.http import JsonResponse
+import mimetypes
+from pathlib import Path
+from django.http import Http404, FileResponse
+from django.conf import settings
+
+FRONTEND_DIR = settings.BASE_DIR.parent / 'frontend'
 
 
-def home(request):
+def serve_frontend(request, path=''):
     """
-    If accessed directly in a browser, redirect to the React frontend on port 5173.
-    If requested as JSON or via API clients, return status.
+    Serves the static frontend (HTML, CSS, JS) directly from Django so
+    http://localhost:8080/ opens the game immediately.
     """
-    if 'text/html' in request.META.get('HTTP_ACCEPT', ''):
-        return redirect('http://localhost:5173/')
+    clean_path = path.strip('/')
+    if not clean_path:
+        target = FRONTEND_DIR / 'index.html'
+    else:
+        target = (FRONTEND_DIR / clean_path).resolve()
+        # Security: prevent directory traversal
+        if not str(target).startswith(str(FRONTEND_DIR.resolve())):
+            raise Http404("Not found")
 
-    return JsonResponse({
-        "project": "BINGO ARENA",
-        "status": "online",
-        "frontend": "http://localhost:5173/",
-        "api": "/api/"
-    })
+    if target.is_file():
+        content_type, _ = mimetypes.guess_type(str(target))
+        return FileResponse(open(target, 'rb'), content_type=content_type or 'text/plain')
+
+    # Fallback to index.html for SPA routing
+    index_file = FRONTEND_DIR / 'index.html'
+    if index_file.is_file():
+        return FileResponse(open(index_file, 'rb'), content_type='text/html')
+
+    raise Http404("File not found")

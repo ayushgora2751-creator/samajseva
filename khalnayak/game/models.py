@@ -76,3 +76,19 @@ class CalledNumber(models.Model):
     def __str__(self):
         caller = self.called_by.name if self.called_by else 'Host'
         return f"#{self.order}: {caller} called {self.number} in {self.room.code}"
+
+
+class ChatMessage(models.Model):
+    room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name='messages')
+    player_name = models.CharField(max_length=50)
+    avatar = models.CharField(max_length=50, default='cyber-fox')
+    text = models.CharField(max_length=200, blank=True)
+    emoji = models.CharField(max_length=20, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        content = self.emoji if self.emoji else self.text
+        return f"[{self.room.code}] {self.player_name}: {content}"

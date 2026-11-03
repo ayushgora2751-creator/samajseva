@@ -1,8 +1,16 @@
+# Netlify Configuration for BINGO ARENA
+# Frontend directory configuration
+
 [build]
   publish = "."
+  command = "echo 'Static frontend ready - no build step needed'"
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
 
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"

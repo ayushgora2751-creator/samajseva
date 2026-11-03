@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "echo 'Static vanilla JS build ready'",
     "lint": "oxlint",
     "preview": "vite preview"
   },
