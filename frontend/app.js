@@ -12,6 +12,22 @@ const AVATARS = [
   { id: 'mystic-dragon', emoji: '🐲' },
 ];
 
+// Initialize Supabase Client
+let supabaseClient = null;
+try {
+  if (
+    typeof supabase !== 'undefined' &&
+    typeof SUPABASE_URL !== 'undefined' &&
+    SUPABASE_URL &&
+    !SUPABASE_URL.includes('YOUR_PROJECT_ID')
+  ) {
+    supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log('[BINGO ARENA] Supabase client initialized!');
+  }
+} catch (e) {
+  console.warn('[BINGO ARENA] Supabase init notice:', e.message);
+}
+
 class SoundEngine {
   constructor() {
     this.ctx = null;
@@ -75,12 +91,15 @@ class BingoArena {
     this.builderGrid = Array(5).fill(null).map(() => Array(5).fill(null));
     this.builderNextNumber = 1;
     this.seenMessageIds = new Set();
+    this.user = null;
+    this.realtimeChannel = null;
   }
 
   init() {
     this.renderAvatars();
     this.checkUrlParams();
     this.checkServerHealth();
+    this.initSupabaseAuth();
 
     const nameInput = document.getElementById('create-player-name');
     if (nameInput && this.playerName) nameInput.value = this.playerName;
@@ -242,6 +261,7 @@ class BingoArena {
     document.getElementById('lobby-room-code').innerText = this.code;
     this.showScreen('screen-lobby');
     this.initBuilderCard();
+    this.subscribeRealtime();
     this.startPolling();
   }
 
@@ -385,6 +405,7 @@ class BingoArena {
       if (!res.ok) throw new Error(data.error || 'Failed to save card.');
       this.card = this.builderGrid;
       this.toast('✅ Custom 5×5 Card Saved & Ready!');
+      this.broadcastRealtime('room_sync');
     } catch (e) {
       this.toast(e.message, true);
     }
@@ -402,6 +423,8 @@ class BingoArena {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to start game.');
       this.toast('Game is starting!');
+      this.broadcastRealtime('room_sync');
+      this.pollState();
     } catch (err) {
       this.toast(err.message, true);
     }
@@ -597,6 +620,7 @@ class BingoArena {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to call number.');
+      this.broadcastRealtime('room_sync');
       this.pollState();
     } catch (err) {
       this.toast(err.message, true);
@@ -615,6 +639,7 @@ class BingoArena {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || 'Win validation failed.');
       this.toast('BINGO verified by server! Victory!');
+      this.broadcastRealtime('room_sync');
       this.pollState();
     } catch (err) {
       this.toast(err.message, true);
@@ -650,6 +675,7 @@ class BingoArena {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to restart.');
       this.toast('Rematch starting with fresh 5x5 boards!');
+      this.broadcastRealtime('room_sync');
       this.pollState();
     } catch (err) {
       this.toast(err.message, true);
@@ -663,6 +689,7 @@ class BingoArena {
     if (!this.code) return;
     this.sound.playClick();
     this.spawnFloatingEmoji(emoji);
+    this.broadcastRealtime('reaction', { emoji });
     try {
       await fetch(`${API_BASE}/api/rooms/${this.code}/chat/`, {
         method: 'POST',
@@ -688,6 +715,7 @@ class BingoArena {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ player_id: this.playerId, text }),
       });
+      this.broadcastRealtime('room_sync');
       this.pollState();
     } catch (e) {
       this.toast('Failed to send message', true);
@@ -747,8 +775,196 @@ class BingoArena {
     }
   }
 
+  // =========================================================================
+  // SUPABASE AUTH & PROFILE MANAGEMENT
+  // =========================================================================
+  async initSupabaseAuth() {
+    if (!supabaseClient) return;
+    try {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if (session && session.user) {
+        this.handleAuthChange(session.user);
+      }
+      supabaseClient.auth.onAuthStateChange((_event, session) => {
+        this.handleAuthChange(session ? session.user : null);
+      });
+    } catch (e) {
+      console.warn('Auth check notice:', e);
+    }
+  }
+
+  handleAuthChange(user) {
+    this.user = user;
+    const loginBtn = document.getElementById('auth-login-btn');
+    const userBadge = document.getElementById('auth-user-badge');
+    const nameDisplay = document.getElementById('nav-user-name');
+    const avatarDisplay = document.getElementById('nav-user-avatar');
+
+    if (user) {
+      const metadata = user.user_metadata || {};
+      const username = metadata.name || (user.email ? user.email.split('@')[0] : 'Gladiator');
+      const avatarId = metadata.avatar || 'cyber-fox';
+      const av = AVATARS.find((a) => a.id === avatarId) || AVATARS[0];
+
+      if (loginBtn) loginBtn.classList.add('hidden');
+      if (userBadge) userBadge.classList.remove('hidden');
+      if (nameDisplay) nameDisplay.innerText = username;
+      if (avatarDisplay) avatarDisplay.innerText = av.emoji;
+
+      // Auto-populate player name inputs
+      this.playerName = username;
+      localStorage.setItem('bingo_player_name', username);
+      const createInput = document.getElementById('create-player-name');
+      const joinInput = document.getElementById('join-player-name');
+      if (createInput) createInput.value = username;
+      if (joinInput) joinInput.value = username;
+    } else {
+      if (loginBtn) loginBtn.classList.remove('hidden');
+      if (userBadge) userBadge.classList.add('hidden');
+    }
+  }
+
+  openAuthModal(tab = 'login') {
+    this.sound.playClick();
+    this.switchAuthTab(tab);
+    document.getElementById('modal-auth').classList.remove('hidden');
+  }
+
+  closeAuthModal() {
+    this.sound.playClick();
+    document.getElementById('modal-auth').classList.add('hidden');
+  }
+
+  switchAuthTab(tab) {
+    const tabLogin = document.getElementById('tab-login');
+    const tabReg = document.getElementById('tab-register');
+    const formLogin = document.getElementById('form-login');
+    const formReg = document.getElementById('form-register');
+    const title = document.getElementById('auth-modal-title');
+
+    if (tab === 'login') {
+      tabLogin.classList.add('active');
+      tabReg.classList.remove('active');
+      formLogin.classList.remove('hidden');
+      formReg.classList.add('hidden');
+      title.innerText = '⚡ Player Login';
+    } else {
+      tabReg.classList.add('active');
+      tabLogin.classList.remove('active');
+      formReg.classList.remove('hidden');
+      formLogin.classList.add('hidden');
+      title.innerText = '✨ Create Gladiator Account';
+    }
+  }
+
+  async signIn() {
+    if (!supabaseClient) {
+      this.toast('Please configure your SUPABASE_URL and SUPABASE_ANON_KEY in config.js first!', true);
+      return;
+    }
+    const email = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    const btn = document.getElementById('login-submit-btn');
+    btn.disabled = true;
+    btn.innerText = 'Signing in...';
+
+    try {
+      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      this.toast(`Welcome back, ${data.user.user_metadata?.name || 'Gladiator'}!`);
+      this.closeAuthModal();
+    } catch (err) {
+      this.toast(err.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.innerText = 'Sign In →';
+    }
+  }
+
+  async signUp() {
+    if (!supabaseClient) {
+      this.toast('Please configure your SUPABASE_URL and SUPABASE_ANON_KEY in config.js first!', true);
+      return;
+    }
+    const name = document.getElementById('reg-name').value.trim();
+    const email = document.getElementById('reg-email').value.trim();
+    const password = document.getElementById('reg-password').value;
+    const btn = document.getElementById('reg-submit-btn');
+    btn.disabled = true;
+    btn.innerText = 'Creating account...';
+
+    try {
+      const { data, error } = await supabaseClient.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { name, avatar: this.selectedAvatar },
+        },
+      });
+      if (error) throw error;
+      this.toast('Account registered! You can now log in.');
+      this.closeAuthModal();
+    } catch (err) {
+      this.toast(err.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.innerText = 'Register Account →';
+    }
+  }
+
+  async signOut() {
+    this.sound.playClick();
+    if (supabaseClient) {
+      await supabaseClient.auth.signOut();
+    }
+    this.handleAuthChange(null);
+    this.toast('Signed out.');
+  }
+
+  // =========================================================================
+  // SUPABASE REALTIME MULTIPLAYER (Zero-Lag Sync)
+  // =========================================================================
+  subscribeRealtime() {
+    if (!supabaseClient || !this.code) return;
+    this.unsubscribeRealtime();
+    this.realtimeChannel = supabaseClient.channel('bingo-room-' + this.code);
+    this.realtimeChannel
+      .on('broadcast', { event: 'room_sync' }, () => {
+        this.pollState();
+      })
+      .on('broadcast', { event: 'reaction' }, (eventData) => {
+        const p = eventData?.payload || eventData;
+        if (p && p.emoji && p.sender !== this.playerName) {
+          this.spawnFloatingEmoji(p.emoji);
+        }
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          this.broadcastRealtime('room_sync');
+        }
+      });
+  }
+
+  unsubscribeRealtime() {
+    if (this.realtimeChannel && supabaseClient) {
+      supabaseClient.removeChannel(this.realtimeChannel);
+      this.realtimeChannel = null;
+    }
+  }
+
+  broadcastRealtime(event, payload = {}) {
+    if (this.realtimeChannel) {
+      this.realtimeChannel.send({
+        type: 'broadcast',
+        event: event,
+        payload: { ...payload, sender: this.playerName },
+      });
+    }
+  }
+
   leaveRoom() {
     this.sound.playClick();
+    this.unsubscribeRealtime();
     this.stopPolling();
     this.code = null;
     this.card = null;
