@@ -194,7 +194,11 @@ class BingoArena {
 
       this.openLobby();
     } catch (err) {
-      this.toast(err.message, true);
+      if (err.message && err.message.toLowerCase().includes('failed to fetch')) {
+        this.toast('Waking up server on Render... Free tier takes 20-30s on first load. Please try again in a few seconds!', true);
+      } else {
+        this.toast(err.message, true);
+      }
     }
   }
 
@@ -226,7 +230,11 @@ class BingoArena {
 
       this.openLobby();
     } catch (err) {
-      this.toast(err.message, true);
+      if (err.message && err.message.toLowerCase().includes('failed to fetch')) {
+        this.toast('Waking up server on Render... Free tier takes 20-30s on first load. Please try again in a few seconds!', true);
+      } else {
+        this.toast(err.message, true);
+      }
     }
   }
 
