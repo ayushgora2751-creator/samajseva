@@ -130,7 +130,18 @@ class BingoAPITests(APITestCase):
         res_bad_start = self.client.post(f'/api/rooms/{code}/start/', {'player_id': p2_id}, format='json')
         self.assertEqual(res_bad_start.status_code, status.HTTP_403_FORBIDDEN)
 
-        # 3. Host starts game
+        # 3. Host tries to start before Player 2 is ready -> Rejected (400)
+        res_unready = self.client.post(f'/api/rooms/{code}/start/', {'player_id': p1_id}, format='json')
+        self.assertEqual(res_unready.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Waiting for", res_unready.data['error'])
+
+        # 4. Player 2 marks ready -> Success
+        res_ready = self.client.post(f'/api/rooms/{code}/ready/', {'player_id': p2_id, 'is_ready': True}, format='json')
+        self.assertEqual(res_ready.status_code, status.HTTP_200_OK)
+        self.assertTrue(res_ready.data['is_ready'])
+        self.assertTrue(res_ready.data['all_ready'])
+
+        # 5. Host starts game successfully now that all are ready
         res_start = self.client.post(f'/api/rooms/{code}/start/', {'player_id': p1_id}, format='json')
         self.assertEqual(res_start.status_code, status.HTTP_200_OK)
 

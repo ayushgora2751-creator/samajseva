@@ -120,6 +120,7 @@ def join_room(request):
         turn_order=next_order,
         card=card,
         marked=[],
+        is_ready=False,
     )
 
     return Response({
@@ -132,9 +133,35 @@ def join_room(request):
 
 
 @api_view(['POST'])
+def toggle_ready(request, code):
+    """
+    Toggles or sets player ready status in the waiting lobby.
+    """
+    room = get_object_or_404(Room, code=code.upper())
+    player_id = request.data.get('player_id')
+    player = get_object_or_404(Player, room=room, player_id=player_id)
+
+    if room.status != Room.STATUS_WAITING:
+        return Response({'error': 'Game has already started.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if 'is_ready' in request.data:
+        player.is_ready = bool(request.data['is_ready'])
+    else:
+        player.is_ready = not player.is_ready
+    player.save(update_fields=['is_ready'])
+
+    unready_count = room.players.exclude(player_id=room.host_player_id).filter(is_ready=False).count()
+    return Response({
+        'player_id': player.player_id,
+        'is_ready': player.is_ready,
+        'all_ready': unready_count == 0,
+    })
+
+
+@api_view(['POST'])
 def start_game(request, code):
     """
-    Starts the match. Allowed only for the host player.
+    Starts the match. Allowed only for the host player when all other players are ready.
     """
     room = get_object_or_404(Room, code=code.upper())
     player_id = request.data.get('player_id')
@@ -145,6 +172,15 @@ def start_game(request, code):
     if room.player_count < 1:
         return Response(
             {'error': 'At least 1 player is required to start.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Validate that all other players are READY
+    unready = room.players.exclude(player_id=room.host_player_id).filter(is_ready=False)
+    if unready.exists():
+        names = ", ".join(unready.values_list('name', flat=True))
+        return Response(
+            {'error': f"Cannot start battle yet! Waiting for {names} to click Ready."},
             status=status.HTTP_400_BAD_REQUEST,
         )
 

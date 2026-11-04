@@ -99,7 +99,6 @@ class BingoArena {
     this.renderAvatars();
     this.checkUrlParams();
     this.checkServerHealth();
-    this.initSupabaseAuth();
 
     const nameInput = document.getElementById('create-player-name');
     if (nameInput && this.playerName) nameInput.value = this.playerName;
@@ -472,12 +471,25 @@ class BingoArena {
         listEl.innerHTML = state.players
           .map((p) => {
             const av = AVATARS.find((a) => a.id === p.avatar) || AVATARS[0];
+            const isHost = p.is_host;
+            let readyPill = '';
+            if (isHost) {
+              readyPill = `<span class="ready-badge host-badge">👑 Host</span>`;
+            } else if (p.is_ready) {
+              readyPill = `<span class="ready-badge ready-yes">✅ READY</span>`;
+            } else {
+              readyPill = `<span class="ready-badge ready-no">⏳ NOT READY</span>`;
+            }
+
             return `
-              <div class="player-pill">
-                <span class="p-avatar">${av.emoji}</span>
+              <div class="player-pill-3d ${p.is_ready ? 'is-ready-card' : ''}">
+                <span class="p-avatar-3d">${av.emoji}</span>
                 <div class="p-info">
-                  <span class="p-name">${p.name}</span>
-                  <span class="p-tag">${p.is_host ? '👑 Host' : 'Player ' + p.turn_order}</span>
+                  <div class="p-name-row">
+                    <span class="p-name">${p.name}</span>
+                    ${readyPill}
+                  </div>
+                  <span class="p-tag">${isHost ? 'Room Creator' : 'Player ' + p.turn_order}</span>
                 </div>
               </div>
             `;
@@ -486,13 +498,50 @@ class BingoArena {
       }
 
       const startBtn = document.getElementById('start-game-btn');
-      if (startBtn) {
-        if (state.is_host) {
+      const readyBtn = document.getElementById('player-ready-btn');
+      const readyHint = document.getElementById('lobby-ready-hint');
+
+      const isHost = state.is_host;
+      const nonHostPlayers = state.players.filter((p) => !p.is_host);
+      const allOthersReady = nonHostPlayers.length > 0 && nonHostPlayers.every((p) => p.is_ready);
+      const myPlayer = state.players.find((p) => p.player_id === this.playerId) || state.players[0];
+
+      if (isHost) {
+        if (readyBtn) readyBtn.style.display = 'none';
+        if (startBtn) {
           startBtn.style.display = 'block';
-          startBtn.disabled = false;
-          startBtn.innerText = state.players.length === 1 ? '▶ Start Battle (Solo Test)' : `⚔️ Start Battle (${state.players.length} Players)`;
-        } else {
-          startBtn.style.display = 'none';
+          if (state.players.length === 1) {
+            startBtn.disabled = false;
+            startBtn.className = 'btn btn-primary btn-lg btn-3d pulse-glow';
+            startBtn.innerText = '▶ Start Battle (Solo Test)';
+            if (readyHint) readyHint.innerHTML = '💡 <em>Solo test mode ready. Invite a friend with the room code above for 1v1!</em>';
+          } else if (allOthersReady) {
+            startBtn.disabled = false;
+            startBtn.className = 'btn btn-primary btn-lg btn-3d pulse-glow-success';
+            startBtn.innerText = `⚔️ Start Battle (All ${state.players.length} Ready!)`;
+            if (readyHint) readyHint.innerHTML = '✨ <strong>All players are ready!</strong> Host can start the match now.';
+          } else {
+            startBtn.disabled = true;
+            startBtn.className = 'btn btn-secondary btn-lg btn-3d btn-waiting';
+            const readyCount = nonHostPlayers.filter((p) => p.is_ready).length;
+            startBtn.innerText = `⏳ Waiting for Players (${readyCount}/${nonHostPlayers.length} Ready)`;
+            if (readyHint) readyHint.innerHTML = `⏳ Waiting for players to customize their board and click <strong>Ready</strong> (${readyCount}/${nonHostPlayers.length} ready)`;
+          }
+        }
+      } else {
+        if (startBtn) startBtn.style.display = 'none';
+        if (readyBtn) {
+          readyBtn.style.display = 'block';
+          const amIReady = myPlayer ? myPlayer.is_ready : false;
+          if (amIReady) {
+            readyBtn.className = 'btn btn-lg btn-3d btn-ready-active';
+            readyBtn.innerText = '✅ YOU ARE READY (Tap to Cancel)';
+            if (readyHint) readyHint.innerHTML = '✅ You are marked ready! Waiting for host to launch the battle...';
+          } else {
+            readyBtn.className = 'btn btn-lg btn-3d btn-ready-pending pulse-amber';
+            readyBtn.innerText = '⚡ CLICK WHEN READY';
+            if (readyHint) readyHint.innerHTML = '👉 Click <strong>"Click When Ready"</strong> once you have arranged your board!';
+          }
         }
       }
     }
@@ -776,149 +825,31 @@ class BingoArena {
   }
 
   // =========================================================================
-  // SUPABASE AUTH & PROFILE MANAGEMENT
+  // PLAYER READY STATUS (Lobby Coordination)
   // =========================================================================
-  async initSupabaseAuth() {
-    if (!supabaseClient) return;
+  async toggleReady() {
+    if (!this.code || !this.playerId) return;
+    this.sound.playClick();
+    const btn = document.getElementById('player-ready-btn');
+    if (btn) btn.disabled = true;
+
     try {
-      const { data: { session } } = await supabaseClient.auth.getSession();
-      if (session && session.user) {
-        this.handleAuthChange(session.user);
-      }
-      supabaseClient.auth.onAuthStateChange((_event, session) => {
-        this.handleAuthChange(session ? session.user : null);
+      const res = await fetch(`${API_BASE}/api/rooms/${this.code}/ready/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player_id: this.playerId }),
       });
-    } catch (e) {
-      console.warn('Auth check notice:', e);
-    }
-  }
-
-  handleAuthChange(user) {
-    this.user = user;
-    const loginBtn = document.getElementById('auth-login-btn');
-    const userBadge = document.getElementById('auth-user-badge');
-    const nameDisplay = document.getElementById('nav-user-name');
-    const avatarDisplay = document.getElementById('nav-user-avatar');
-
-    if (user) {
-      const metadata = user.user_metadata || {};
-      const username = metadata.name || (user.email ? user.email.split('@')[0] : 'Gladiator');
-      const avatarId = metadata.avatar || 'cyber-fox';
-      const av = AVATARS.find((a) => a.id === avatarId) || AVATARS[0];
-
-      if (loginBtn) loginBtn.classList.add('hidden');
-      if (userBadge) userBadge.classList.remove('hidden');
-      if (nameDisplay) nameDisplay.innerText = username;
-      if (avatarDisplay) avatarDisplay.innerText = av.emoji;
-
-      // Auto-populate player name inputs
-      this.playerName = username;
-      localStorage.setItem('bingo_player_name', username);
-      const createInput = document.getElementById('create-player-name');
-      const joinInput = document.getElementById('join-player-name');
-      if (createInput) createInput.value = username;
-      if (joinInput) joinInput.value = username;
-    } else {
-      if (loginBtn) loginBtn.classList.remove('hidden');
-      if (userBadge) userBadge.classList.add('hidden');
-    }
-  }
-
-  openAuthModal(tab = 'login') {
-    this.sound.playClick();
-    this.switchAuthTab(tab);
-    document.getElementById('modal-auth').classList.remove('hidden');
-  }
-
-  closeAuthModal() {
-    this.sound.playClick();
-    document.getElementById('modal-auth').classList.add('hidden');
-  }
-
-  switchAuthTab(tab) {
-    const tabLogin = document.getElementById('tab-login');
-    const tabReg = document.getElementById('tab-register');
-    const formLogin = document.getElementById('form-login');
-    const formReg = document.getElementById('form-register');
-    const title = document.getElementById('auth-modal-title');
-
-    if (tab === 'login') {
-      tabLogin.classList.add('active');
-      tabReg.classList.remove('active');
-      formLogin.classList.remove('hidden');
-      formReg.classList.add('hidden');
-      title.innerText = '⚡ Player Login';
-    } else {
-      tabReg.classList.add('active');
-      tabLogin.classList.remove('active');
-      formReg.classList.remove('hidden');
-      formLogin.classList.add('hidden');
-      title.innerText = '✨ Create Gladiator Account';
-    }
-  }
-
-  async signIn() {
-    if (!supabaseClient) {
-      this.toast('Please configure your SUPABASE_URL and SUPABASE_ANON_KEY in config.js first!', true);
-      return;
-    }
-    const email = document.getElementById('login-email').value.trim();
-    const password = document.getElementById('login-password').value;
-    const btn = document.getElementById('login-submit-btn');
-    btn.disabled = true;
-    btn.innerText = 'Signing in...';
-
-    try {
-      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-      this.toast(`Welcome back, ${data.user.user_metadata?.name || 'Gladiator'}!`);
-      this.closeAuthModal();
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update ready status.');
+      this.toast(data.is_ready ? '✅ You are marked Ready!' : 'Marked as Not Ready.');
+      this.broadcastRealtime('room_sync');
+      this.pollState();
     } catch (err) {
       this.toast(err.message, true);
     } finally {
-      btn.disabled = false;
-      btn.innerText = 'Sign In →';
+      if (btn) btn.disabled = false;
     }
   }
-
-  async signUp() {
-    if (!supabaseClient) {
-      this.toast('Please configure your SUPABASE_URL and SUPABASE_ANON_KEY in config.js first!', true);
-      return;
-    }
-    const name = document.getElementById('reg-name').value.trim();
-    const email = document.getElementById('reg-email').value.trim();
-    const password = document.getElementById('reg-password').value;
-    const btn = document.getElementById('reg-submit-btn');
-    btn.disabled = true;
-    btn.innerText = 'Creating account...';
-
-    try {
-      const { data, error } = await supabaseClient.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { name, avatar: this.selectedAvatar },
-        },
-      });
-      if (error) throw error;
-      this.toast('Account registered! You can now log in.');
-      this.closeAuthModal();
-    } catch (err) {
-      this.toast(err.message, true);
-    } finally {
-      btn.disabled = false;
-      btn.innerText = 'Register Account →';
-    }
-  }
-
-  async signOut() {
-    this.sound.playClick();
-    if (supabaseClient) {
-      await supabaseClient.auth.signOut();
-    }
-    this.handleAuthChange(null);
-    this.toast('Signed out.');
   }
 
   // =========================================================================

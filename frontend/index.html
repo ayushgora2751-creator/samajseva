@@ -50,28 +50,6 @@
           </div>
         </div>
         <div class="nav-actions">
-          <!-- Supabase Auth Status / Profile Pill -->
-          <div id="auth-nav-container">
-            <button
-              id="auth-login-btn"
-              class="btn btn-sm btn-purple"
-              onclick="app.openAuthModal('login')"
-            >
-              🔑 Login / Register
-            </button>
-            <div id="auth-user-badge" class="user-profile-badge hidden">
-              <span id="nav-user-avatar" class="nav-avatar">🦊</span>
-              <span id="nav-user-name" class="nav-username">Player</span>
-              <button
-                class="logout-link"
-                onclick="app.signOut()"
-                title="Sign Out"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-
           <button
             id="sound-toggle-btn"
             class="icon-btn"
@@ -247,8 +225,18 @@
             </div>
           </div>
 
-          <!-- Host Start Game Button -->
+          <!-- Host Start Game Button & Non-Host Ready Button -->
           <div class="lobby-actions">
+            <!-- Non-host Ready Toggle -->
+            <button
+              id="player-ready-btn"
+              class="btn btn-lg btn-ready-toggle"
+              onclick="app.toggleReady()"
+              style="display: none;"
+            >
+              ⚡ Click When Ready
+            </button>
+            <!-- Host Start Game Button -->
             <button
               id="start-game-btn"
               class="btn btn-primary btn-lg"
@@ -256,6 +244,7 @@
             >
               ▶ Start Battle (Solo Test)
             </button>
+            <div id="lobby-ready-hint" class="ready-hint-badge"></div>
             <p class="lobby-multiplayer-hint" style="color: #94a3b8; font-size: 0.85rem; margin-top: 8px;">
               💡 <em>To play with a friend, open this site in an Incognito / Private window or another browser and enter the Room Code above!</em>
             </p>
@@ -458,76 +447,10 @@
         </div>
       </div>
 
-      <!-- SUPABASE AUTH MODAL (Login & Register) -->
-      <div id="modal-auth" class="modal-overlay hidden">
-        <div class="modal-card glass-panel auth-modal-card">
-          <div class="modal-header">
-            <h3 id="auth-modal-title">⚡ Player Login</h3>
-            <button class="close-btn" onclick="app.closeAuthModal()">✕</button>
-          </div>
-
-          <!-- Auth Tabs -->
-          <div class="auth-tabs">
-            <button
-              id="tab-login"
-              class="auth-tab active"
-              onclick="app.switchAuthTab('login')"
-            >
-              Sign In
-            </button>
-            <button
-              id="tab-register"
-              class="auth-tab"
-              onclick="app.switchAuthTab('register')"
-            >
-              Create Account
-            </button>
-          </div>
-
-          <!-- Sign In Form -->
-          <form id="form-login" class="auth-form" onsubmit="event.preventDefault(); app.signIn();">
-            <div class="form-group">
-              <label>Email Address</label>
-              <input type="email" id="login-email" placeholder="you@example.com" required />
-            </div>
-            <div class="form-group">
-              <label>Password</label>
-              <input type="password" id="login-password" placeholder="••••••••" required />
-            </div>
-            <button type="submit" id="login-submit-btn" class="btn btn-primary btn-block">
-              Sign In →
-            </button>
-          </form>
-
-          <!-- Register Form -->
-          <form id="form-register" class="auth-form hidden" onsubmit="event.preventDefault(); app.signUp();">
-            <div class="form-group">
-              <label>Player Nickname</label>
-              <input type="text" id="reg-name" placeholder="e.g. ShadowViper" maxlength="20" required />
-            </div>
-            <div class="form-group">
-              <label>Email Address</label>
-              <input type="email" id="reg-email" placeholder="you@example.com" required />
-            </div>
-            <div class="form-group">
-              <label>Create Password</label>
-              <input type="password" id="reg-password" placeholder="At least 6 characters" minlength="6" required />
-            </div>
-            <button type="submit" id="reg-submit-btn" class="btn btn-primary btn-block">
-              Register Account →
-            </button>
-          </form>
-
-          <div class="auth-modal-footer">
-            <span class="text-muted">Or keep playing anonymously:</span>
-            <button class="btn-link" onclick="app.closeAuthModal()">Continue as Guest</button>
-          </div>
-        </div>
-      </div>
     </main>
 
     <!-- Load Config & Vanilla JS App -->
-    <script src="config.js?v=2.2"></script>
-    <script src="app.js?v=2.2"></script>
+    <script src="config.js?v=3.0"></script>
+    <script src="app.js?v=3.0"></script>
   </body>
 </html>

@@ -9,6 +9,7 @@ urlpatterns = [
     path('health/', views.health_check, name='health_check'),
     path('rooms/create/', views.create_room, name='create_room'),
     path('rooms/join/', views.join_room, name='join_room'),
+    path('rooms/<str:code>/ready/', views.toggle_ready, name='toggle_ready'),
     path('rooms/<str:code>/start/', views.start_game, name='start_game'),
     path('rooms/<str:code>/call/', views.call_number, name='call_number'),
     path('rooms/<str:code>/state/', views.get_game_state, name='game_state'),
