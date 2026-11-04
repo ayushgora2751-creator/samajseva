@@ -288,6 +288,7 @@ def get_game_state(request, code):
     for p in room.players.all():
         p_lines = calculate_lines(p.card, called_list)
         players_data.append({
+            'player_id': p.player_id,
             'name': p.name,
             'avatar': p.avatar,
             'turn_order': p.turn_order,
@@ -306,6 +307,7 @@ def get_game_state(request, code):
         'status': room.status,
         'host_player_id': room.host_player_id,
         'is_host': bool(player and player.player_id == room.host_player_id),
+        'my_ready': bool(player and player.is_ready),
         'current_turn': room.current_turn,
         'active_player_name': active_name,
         'is_my_turn': bool(player and player.turn_order == room.current_turn and room.status == Room.STATUS_PLAYING),

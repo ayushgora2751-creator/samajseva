@@ -91,8 +91,9 @@ class BingoArena {
     this.builderGrid = Array(5).fill(null).map(() => Array(5).fill(null));
     this.builderNextNumber = 1;
     this.seenMessageIds = new Set();
-    this.user = null;
     this.realtimeChannel = null;
+    this._syncDebounce = null;
+    this._isCalling = false;
   }
 
   init() {
@@ -102,22 +103,27 @@ class BingoArena {
 
     const nameInput = document.getElementById('create-player-name');
     if (nameInput && this.playerName) nameInput.value = this.playerName;
+
+    const joinNameInput = document.getElementById('join-player-name');
+    if (joinNameInput && this.playerName) joinNameInput.value = this.playerName;
   }
 
   // Handle Render free-tier cold start detection
   async checkServerHealth() {
     const banner = document.getElementById('server-status-banner');
-    const controller = new AbortController();
     const timeout = setTimeout(() => {
       if (banner) banner.classList.remove('hidden');
     }, 2000);
 
     try {
-      await fetch(`${API_BASE}/api/health/`, { signal: controller.signal });
+      const res = await fetch(`${API_BASE}/api/health/`);
       clearTimeout(timeout);
-      if (banner) banner.classList.add('hidden');
+      if (res.ok && banner) {
+        banner.classList.add('hidden');
+      }
     } catch (e) {
-      // Server might still be waking up on Render
+      // Server may still be spinning up on Render free tier; retry in 5s
+      setTimeout(() => this.checkServerHealth(), 5000);
     }
   }
 
@@ -196,6 +202,9 @@ class BingoArena {
     this.playerName = name;
     localStorage.setItem('bingo_player_name', name);
 
+    const btn = document.querySelector('#screen-home .action-card:first-child .btn-primary');
+    if (btn) btn.disabled = true;
+
     try {
       const res = await fetch(`${API_BASE}/api/rooms/create/`, {
         method: 'POST',
@@ -217,6 +226,8 @@ class BingoArena {
       } else {
         this.toast(err.message, true);
       }
+    } finally {
+      if (btn) btn.disabled = false;
     }
   }
 
@@ -231,6 +242,9 @@ class BingoArena {
     }
     this.playerName = name;
     localStorage.setItem('bingo_player_name', name);
+
+    const btn = document.querySelector('#screen-home .action-card:last-child .btn-secondary');
+    if (btn) btn.disabled = true;
 
     try {
       const res = await fetch(`${API_BASE}/api/rooms/join/`, {
@@ -253,6 +267,8 @@ class BingoArena {
       } else {
         this.toast(err.message, true);
       }
+    } finally {
+      if (btn) btn.disabled = false;
     }
   }
 
@@ -504,7 +520,8 @@ class BingoArena {
       const isHost = state.is_host;
       const nonHostPlayers = state.players.filter((p) => !p.is_host);
       const allOthersReady = nonHostPlayers.length > 0 && nonHostPlayers.every((p) => p.is_ready);
-      const myPlayer = state.players.find((p) => p.player_id === this.playerId) || state.players[0];
+      const myPlayer = state.players.find((p) => p.player_id === this.playerId);
+      const amIReady = state.my_ready !== undefined ? state.my_ready : (myPlayer ? myPlayer.is_ready : false);
 
       if (isHost) {
         if (readyBtn) readyBtn.style.display = 'none';
@@ -532,7 +549,6 @@ class BingoArena {
         if (startBtn) startBtn.style.display = 'none';
         if (readyBtn) {
           readyBtn.style.display = 'block';
-          const amIReady = myPlayer ? myPlayer.is_ready : false;
           if (amIReady) {
             readyBtn.className = 'btn btn-lg btn-3d btn-ready-active';
             readyBtn.innerText = '✅ YOU ARE READY (Tap to Cancel)';
@@ -552,6 +568,12 @@ class BingoArena {
         this.showScreen('screen-game');
         document.getElementById('game-room-code').innerText = state.code;
         document.getElementById('my-name-display').innerText = this.playerName || 'You';
+      }
+
+      // Hide winner modal if transitioning to a new active round
+      const winnerModal = document.getElementById('modal-winner');
+      if (winnerModal && !winnerModal.classList.contains('hidden') && state.status === 'playing') {
+        winnerModal.classList.add('hidden');
       }
 
       // Turn indicators
@@ -586,6 +608,18 @@ class BingoArena {
           else el.classList.remove('active');
         }
       });
+
+      // Update Claim Bingo Button feedback
+      const claimBtn = document.getElementById('claim-bingo-btn');
+      if (claimBtn) {
+        if (totalLines >= 5) {
+          claimBtn.className = 'btn btn-gold btn-block pulse-glow';
+          claimBtn.innerText = '👑 CLAIM BINGO NOW! (5/5 LINES REACHED)';
+        } else {
+          claimBtn.className = 'btn btn-gold btn-block';
+          claimBtn.innerText = `⭐ CLAIM BINGO (${totalLines}/5 Lines)`;
+        }
+      }
 
       // Called numbers chips
       const chipsEl = document.getElementById('called-chips-list');
@@ -660,6 +694,8 @@ class BingoArena {
 
   // API Call: Call a number
   async callNumber(number) {
+    if (this._isCalling) return;
+    this._isCalling = true;
     this.sound.playTile();
     try {
       const res = await fetch(`${API_BASE}/api/rooms/${this.code}/call/`, {
@@ -673,6 +709,8 @@ class BingoArena {
       this.pollState();
     } catch (err) {
       this.toast(err.message, true);
+    } finally {
+      this._isCalling = false;
     }
   }
 
@@ -699,11 +737,12 @@ class BingoArena {
     const modal = document.getElementById('modal-winner');
     if (!modal) return;
     const isMe = winnerName === this.playerName;
+    const isFirstShow = modal.classList.contains('hidden');
     document.getElementById('winner-title').innerText = isMe ? 'YOU CONQUERED THE ARENA!' : `${winnerName.toUpperCase()} WON!`;
     document.getElementById('winner-subtitle').innerText = isMe ? 'Flawless 5 lines completed!' : 'Better luck in the next round!';
     modal.classList.remove('hidden');
 
-    if (isMe) {
+    if (isMe && isFirstShow) {
       this.sound.playVictory();
       if (typeof confetti === 'function') {
         confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
@@ -850,18 +889,22 @@ class BingoArena {
       if (btn) btn.disabled = false;
     }
   }
-  }
 
   // =========================================================================
   // SUPABASE REALTIME MULTIPLAYER (Zero-Lag Sync)
   // =========================================================================
+  triggerSync() {
+    if (this._syncDebounce) clearTimeout(this._syncDebounce);
+    this._syncDebounce = setTimeout(() => this.pollState(), 150);
+  }
+
   subscribeRealtime() {
     if (!supabaseClient || !this.code) return;
     this.unsubscribeRealtime();
     this.realtimeChannel = supabaseClient.channel('bingo-room-' + this.code);
     this.realtimeChannel
       .on('broadcast', { event: 'room_sync' }, () => {
-        this.pollState();
+        this.triggerSync();
       })
       .on('broadcast', { event: 'reaction' }, (eventData) => {
         const p = eventData?.payload || eventData;
@@ -899,6 +942,9 @@ class BingoArena {
     this.stopPolling();
     this.code = null;
     this.card = null;
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
     document.getElementById('modal-winner').classList.add('hidden');
     this.showHome();
   }
