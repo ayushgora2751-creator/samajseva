@@ -198,3 +198,108 @@ class BingoAPITests(APITestCase):
 
         res = self.client.post(f'/api/rooms/{code}/chat/', {'player_id': player_id, 'text': '   ', 'emoji': ''}, format='json')
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_ready_toggle_and_state_endpoint(self):
+        """Tests ready toggle states, presence of player_id in players list, and my_ready."""
+        res_c = self.client.post('/api/rooms/create/', {'name': 'HostPlayer'}, format='json')
+        code = res_c.data['code']
+        host_id = res_c.data['player_id']
+
+        res_j = self.client.post('/api/rooms/join/', {'code': code, 'name': 'JoiningPlayer'}, format='json')
+        p2_id = res_j.data['player_id']
+
+        # Check state: Host is host, JoiningPlayer is unready
+        res_s2 = self.client.get(f'/api/rooms/{code}/state/?player_id={p2_id}')
+        self.assertEqual(res_s2.status_code, status.HTTP_200_OK)
+        self.assertFalse(res_s2.data['is_host'])
+        self.assertFalse(res_s2.data['my_ready'])
+        # Verify player_id is serialized in players list
+        players = res_s2.data['players']
+        p2_entry = next((p for p in players if p['player_id'] == p2_id), None)
+        self.assertIsNotNone(p2_entry)
+        self.assertFalse(p2_entry['is_ready'])
+
+        # Toggle ready
+        res_toggle = self.client.post(f'/api/rooms/{code}/ready/', {'player_id': p2_id}, format='json')
+        self.assertEqual(res_toggle.status_code, status.HTTP_200_OK)
+        self.assertTrue(res_toggle.data['is_ready'])
+
+        # State now reflects my_ready=True
+        res_s2_after = self.client.get(f'/api/rooms/{code}/state/?player_id={p2_id}')
+        self.assertTrue(res_s2_after.data['my_ready'])
+
+    def test_custom_card_dimensions_and_game_started_lock(self):
+        """Tests that invalid matrices (not 5x5 or missing numbers) and started game modifications are rejected."""
+        res_c = self.client.post('/api/rooms/create/', {'name': 'Host'}, format='json')
+        code = res_c.data['code']
+        host_id = res_c.data['player_id']
+
+        # 4x5 card -> Rejected
+        bad_dim = [[1, 2, 3, 4, 5] for _ in range(4)]
+        res_dim = self.client.post(f'/api/rooms/{code}/card/', {'player_id': host_id, 'card': bad_dim}, format='json')
+        self.assertEqual(res_dim.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # Numbers with 0 or 26 -> Rejected
+        bad_nums = [[i * 5 + j for j in range(5)] for i in range(5)]  # starts with 0..24
+        res_nums = self.client.post(f'/api/rooms/{code}/card/', {'player_id': host_id, 'card': bad_nums}, format='json')
+        self.assertEqual(res_nums.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # Start game
+        self.client.post(f'/api/rooms/{code}/start/', {'player_id': host_id}, format='json')
+
+        # Try to update card when game has already started -> Rejected
+        valid_card = [[(r * 5 + c + 1) for c in range(5)] for r in range(5)]
+        res_after = self.client.post(f'/api/rooms/{code}/card/', {'player_id': host_id, 'card': valid_card}, format='json')
+        self.assertEqual(res_after.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_reconnection_and_max_players_limit(self):
+        """Tests player reconnection idempotency and max room capacity rejection."""
+        res_c = self.client.post('/api/rooms/create/', {'name': 'Host'}, format='json')
+        code = res_c.data['code']
+
+        # Join 5 additional players to reach maximum 6 players
+        guest_ids = []
+        for i in range(2, 7):
+            res_j = self.client.post('/api/rooms/join/', {'code': code, 'name': f'Player{i}'}, format='json')
+            self.assertEqual(res_j.status_code, status.HTTP_200_OK)
+            guest_ids.append(res_j.data['player_id'])
+
+        # 7th player attempt -> Rejected (Room is full)
+        res_overflow = self.client.post('/api/rooms/join/', {'code': code, 'name': 'Player7'}, format='json')
+        self.assertEqual(res_overflow.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("full", res_overflow.data['error'])
+
+        # Existing player re-joins -> Reconnection success without increasing count
+        res_reconnect = self.client.post('/api/rooms/join/', {'code': code, 'name': 'Player2', 'player_id': guest_ids[0]}, format='json')
+        self.assertEqual(res_reconnect.status_code, status.HTTP_200_OK)
+        self.assertTrue(res_reconnect.data['is_reconnection'])
+        self.assertEqual(res_reconnect.data['player_id'], guest_ids[0])
+
+    def test_five_line_bingo_completion_victory(self):
+        """Simulates complete match where player completes 5 lines and triggers server victory."""
+        res_c = self.client.post('/api/rooms/create/', {'name': 'Winner'}, format='json')
+        code = res_c.data['code']
+        p1_id = res_c.data['player_id']
+
+        # Set arranged card: row 0..4 = 1..25
+        card = [[(r * 5 + c + 1) for c in range(5)] for r in range(5)]
+        self.client.post(f'/api/rooms/{code}/card/', {'player_id': p1_id, 'card': card}, format='json')
+
+        # Start game solo
+        self.client.post(f'/api/rooms/{code}/start/', {'player_id': p1_id}, format='json')
+
+        # Call rows 0, 1, 2, 3, 4 (25 numbers in total, completing all 5 rows + columns + diagonals)
+        for num in range(1, 26):
+            res_call = self.client.post(f'/api/rooms/{code}/call/', {'player_id': p1_id, 'number': num}, format='json')
+            if res_call.data.get('is_game_over'):
+                break
+
+        # Verify room state is finished and winner is 'Winner'
+        res_state = self.client.get(f'/api/rooms/{code}/state/?player_id={p1_id}')
+        self.assertEqual(res_state.data['status'], 'finished')
+        self.assertEqual(res_state.data['winner_name'], 'Winner')
+
+        # Claim bingo endpoint also verifies win
+        res_claim = self.client.post(f'/api/rooms/{code}/bingo/', {'player_id': p1_id}, format='json')
+        self.assertEqual(res_claim.status_code, status.HTTP_200_OK)
+        self.assertTrue(res_claim.data['verified'])
